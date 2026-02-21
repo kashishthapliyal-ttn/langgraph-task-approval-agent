@@ -1,52 +1,51 @@
-// role -> pause the graph to ask the user/human -> Approve these steps ?
-// true, false
-// write { arppoved } state
-
-import { State } from "../types";
-
-// per run helper passeed by langgraph in the node context
-// interrupt({steps}) -> pauses
-//  {threadID, steps} -> send back to UI
-// post api call to approve endpoint
-// backend -> resume -> new Command
+import { State } from '../types';
+import { withTimeout } from '../../utils/withTimeout';
 
 export async function approveNode(
   state: State,
-  context: any
+  context: any,
 ): Promise<Partial<State>> {
-  if (state.status === "cancelled") return {};
+  if (state.status === 'cancelled') return {};
 
   const steps = state.steps ?? [];
 
   if (steps.length === 0) {
     return {
       approved: true,
-      message: "No steps to approve; procedding->",
+      message: 'No steps to approve; procedding->',
     };
   }
 
   const interrupt = context?.interrupt as (
-    payload: unknown
+    payload: unknown,
   ) => Promise<unknown>;
 
-  const decision = await interrupt({
-    type: "approval_request",
-    steps,
-  });
+  try {
+    const decision = await withTimeout(
+      interrupt({ type: 'approval_request', steps }),
+      60_000,
+    );
 
-  let approved: boolean;
+    let approved: boolean;
 
-  if (
-    decision &&
-    typeof decision === "object" &&
-    "approve" in (decision as any)
-  ) {
-    approved = !!(decision as any).approve;
-  } else {
-    approved = !!decision;
+    if (
+      decision &&
+      typeof decision === 'object' &&
+      'approve' in (decision as any)
+    ) {
+      approved = !!(decision as any).approve;
+    } else {
+      approved = !!decision;
+    }
+
+    return {
+      approved,
+    };
+  } catch (err) {
+    return {
+      approved: false,
+      status: 'cancelled',
+      message: 'Approval process failed.',
+    };
   }
-
-  return {
-    approved,
-  };
 }

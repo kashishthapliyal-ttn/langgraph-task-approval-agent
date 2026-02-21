@@ -1,64 +1,65 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { z } from "zod";
-import { env } from "../../utils/env";
-import { State } from "../types";
+import { z } from 'zod';
+import { env } from '../../utils/env';
+import { State } from '../types';
+import { getChatModel } from '../../utils/model';
 
 const PlanSchema = z.object({
   steps: z
-    .array(z.string().min(3, "Keep each step a short sentence"))
-    .max(150, "Keep each step concise")
+    .array(
+      z
+        .string()
+        .min(5, 'Step too short')
+        .refine((val) => !/research|try your best/i.test(val), {
+          message: 'Step too vague',
+        }),
+    )
     .min(1)
-    .max(10),
+    .max(5),
 });
 
-type Plan = z.infer<typeof PlanSchema>;
-
-function makeModel() {
-  return new ChatOpenAI({
-    apiKey: env.OPENAI_API_KEY,
-    model: env.OPENAI_MODEL,
-    temperature: 0.2,
-  });
-}
-
 const SYSTEM = [
-  "You are a helpful planner.",
-  "Return only JSON that matches the schema.",
-  "Keep steps concrete, actionable and beginner friendly",
-].join("\n");
+  'You are a helpful planner.',
+  'Return only JSON that matches the schema.',
+  'Keep steps concrete, actionable and begineer friendly.',
+].join('\n');
 
 function userPrompt(input: string) {
   return [
-    `User goal: "${input}"`,
-    "Draft a small plan with 3-5 steps",
-    "- Each step is a short sentence",
-  ].join("\n");
-}
-
-function takeFirstN(arr: string[], n = 5): string[] {
-  return Array.isArray(arr) ? arr.slice(0, Math.max(0, n)) : [];
+    `User goal "${input}"`,
+    'Draft a small plan with 3-5 steps',
+    '- Each step is a short sentence',
+  ].join('\n');
 }
 
 export async function PlanNode(state: State): Promise<Partial<State>> {
-  if (state.status === "cancelled") return {};
+  if (state.status === 'cancelled') {
+    return {};
+  }
 
-  const model = makeModel();
+  try {
+    const model = getChatModel({
+      maxTokens: 600,
+      temperature: 0.1,
+    });
 
-  const structured = model.withStructuredOutput(PlanSchema);
+    const structuredModel = model.withStructuredOutput(PlanSchema);
 
-  const plan = await structured.invoke([
-    {
-      role: "system",
-      content: SYSTEM,
-    },
+    const plan = await structuredModel.invoke([
+      { role: 'system', content: SYSTEM },
+      { role: 'human', content: userPrompt(state.input) },
+    ]);
 
-    {
-      role: "human",
-      content: userPrompt(state.input),
-    },
-  ]);
+    const unique = [...new Set(plan.steps)];
 
-  const steps = takeFirstN(plan.steps, 5);
-
-  return { steps, status: "planned" };
+    return {
+      steps: unique,
+      status: 'planned',
+    };
+  } catch (err) {
+    console.error(err);
+    return {
+      status: 'cancelled',
+      message: 'Could not generate plan.',
+    };
+  }
 }
