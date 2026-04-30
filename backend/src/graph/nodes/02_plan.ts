@@ -22,12 +22,20 @@ const SYSTEM = [
   "Keep steps concrete, actionable and begineer friendly.",
 ].join("\n");
 
-function userPrompt(input: string) {
-  return [
-    `User goal "${input}"`,
+function userPrompt(state: State) {
+  const parts = [
+    `User goal "${state.input}"`,
     "Draft a small plan with 3-5 steps",
     "- Each step is a short sentence",
-  ].join("\n");
+  ];
+  const answers = state.userAnswers;
+  if (answers && Object.keys(answers).length > 0) {
+    parts.push(
+      "The user provided these details (respect them in the plan):",
+      JSON.stringify(answers, null, 0),
+    );
+  }
+  return parts.join("\n");
 }
 
 export async function PlanNode(state: State): Promise<Partial<State>> {
@@ -45,7 +53,7 @@ export async function PlanNode(state: State): Promise<Partial<State>> {
 
     const plan = await structuredModel.invoke([
       { role: "system", content: SYSTEM },
-      { role: "human", content: userPrompt(state.input) },
+      { role: "human", content: userPrompt(state) },
     ]);
 
     const unique = [...new Set(plan.steps)];

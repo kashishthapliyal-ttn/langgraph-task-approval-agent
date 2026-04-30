@@ -8,6 +8,7 @@ import {
   ThumbsDown,
   ThumbsUp,
 } from "lucide-react";
+import { useMemo, useState } from "react";
 import {
   Card,
   CardContent,
@@ -25,13 +26,26 @@ function RunLogs({
   loading,
   onApprove,
   onReject,
+  onSubmitClarify,
 }: Readonly<{
   interrupt?: InterruptView | null;
   final?: FinalView | null;
   loading?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
+  onSubmitClarify?: (answers: Record<string, string>) => void;
 }>) {
+  const initialAnswers = useMemo(() => {
+    if (!interrupt || interrupt.kind !== "needs_clarify") return {};
+    const o: Record<string, string> = {};
+    for (const f of interrupt.fields) {
+      o[f.key] = "";
+    }
+    return o;
+  }, [interrupt]);
+
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
   if (loading) {
     return (
       <Card className="mt-5 border-primary/20">
@@ -47,7 +61,61 @@ function RunLogs({
     );
   }
 
-  if (interrupt) {
+  if (interrupt?.kind === "needs_clarify") {
+    const merged = { ...initialAnswers, ...answers };
+    for (const k of Object.keys(initialAnswers)) {
+      if (merged[k] === undefined) merged[k] = "";
+    }
+
+    return (
+      <Card className="mt-5 border-primary/20">
+        <div className="p-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-2xl">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              More information needed
+            </CardTitle>
+          </CardHeader>
+          <CardDescription className="text-base pt-3">
+            {interrupt.prompt}
+          </CardDescription>
+          <CardContent className="space-y-5">
+            <div className="space-y-4 mt-5">
+              {interrupt.fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <label
+                    className="text-sm font-medium text-foreground"
+                    htmlFor={`clarify-${field.key}`}
+                  >
+                    {field.label}
+                  </label>
+                  <input
+                    id={`clarify-${field.key}`}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={merged[field.key] ?? ""}
+                    onChange={(e) =>
+                      setAnswers((prev) => ({
+                        ...prev,
+                        [field.key]: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+              <Button
+                className="mt-4 w-full"
+                onClick={() => onSubmitClarify?.(merged)}
+              >
+                Continue
+              </Button>
+            </div>
+          </CardContent>
+        </div>
+      </Card>
+    );
+  }
+
+  if (interrupt?.kind === "needs_approval") {
     return (
       <Card className="mt-5 border-primary/20">
         <div className="p-6">
@@ -58,7 +126,7 @@ function RunLogs({
             </CardTitle>
           </CardHeader>
           <CardDescription className="text-base pt-3">
-            {interrupt?.prompt}
+            {interrupt.prompt}
           </CardDescription>
           <CardContent className="space-y-5">
             <div className="space-y-3 mt-5">
@@ -66,7 +134,7 @@ function RunLogs({
                 Planned Steps
               </h4>
               <ol className="space-y-2 pl-6 list-decimal">
-                {interrupt?.steps.map((step, i) => (
+                {interrupt.steps.map((step, i) => (
                   <li
                     className="text-foreground leading-relaxed"
                     key={`${step}-${i}`}

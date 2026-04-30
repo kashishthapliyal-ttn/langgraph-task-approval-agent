@@ -8,10 +8,23 @@ const StartSchema = z.object({
   input: z.string().min(1, "Input is needed"),
 });
 
-const ApproveSchema = z.object({
-  threadId: z.string().min(1, "threadId is required"),
-  approve: z.boolean(),
-});
+const ResumeSchema = z.union([
+  z.object({
+    threadId: z.string().min(1, "threadId is required"),
+    answers: z.record(z.string(), z.string()),
+  }),
+  z.object({
+    threadId: z.string().min(1, "threadId is required"),
+    approve: z.boolean(),
+  }),
+]);
+
+function jsonResume(body: z.infer<typeof ResumeSchema>): unknown {
+  if ("answers" in body) {
+    return body.answers;
+  }
+  return { approve: body.approve };
+}
 
 router.post("/", async (req, res) => {
   const parsed = StartSchema.safeParse(req.body);
@@ -36,14 +49,28 @@ router.post("/", async (req, res) => {
     }
 
     if ("interrupt" in result) {
+      const i = result.interrupt;
+      if (i.kind === "needs_clarify") {
+        return res.json({
+          status: "ok",
+          data: {
+            kind: "needs_clarify",
+            interrupt: {
+              threadId: i.threadId,
+              fields: i.fields,
+              prompt: i.prompt,
+            },
+          },
+        });
+      }
       return res.json({
         status: "ok",
         data: {
           kind: "needs_approval",
           interrupt: {
-            threadId: result.interrupt.threadId,
-            steps: result.interrupt.steps,
-            prompt: "Approve the generated plan to execute or reject to calcel",
+            threadId: i.threadId,
+            steps: i.steps,
+            prompt: i.prompt,
           },
         },
       });
@@ -62,7 +89,7 @@ router.post("/", async (req, res) => {
 });
 
 router.post("/approve", async (req, res) => {
-  const parsed = ApproveSchema.safeParse(req.body);
+  const parsed = ResumeSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
       status: "error",
@@ -71,10 +98,44 @@ router.post("/approve", async (req, res) => {
   }
 
   try {
-    const { threadId, approve } = parsed.data;
+    const result = await resumeAgentRun({
+      threadId: parsed.data.threadId,
+      resume: jsonResume(parsed.data),
+    });
 
-    const final = await resumeAgentRun({ threadId, approve });
-    return res.json({ status: "ok", data: { kind: "final", final } });
+    if ("final" in result) {
+      return res.json({
+        status: "ok",
+        data: { kind: "final", final: result.final },
+      });
+    }
+
+    const i = result.interrupt;
+    if (i.kind === "needs_clarify") {
+      return res.json({
+        status: "ok",
+        data: {
+          kind: "needs_clarify",
+          interrupt: {
+            threadId: i.threadId,
+            fields: i.fields,
+            prompt: i.prompt,
+          },
+        },
+      });
+    }
+
+    return res.json({
+      status: "ok",
+      data: {
+        kind: "needs_approval",
+        interrupt: {
+          threadId: i.threadId,
+          steps: i.steps,
+          prompt: i.prompt,
+        },
+      },
+    });
   } catch {
     return res.status(500).json({
       status: "error",

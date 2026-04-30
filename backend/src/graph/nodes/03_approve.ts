@@ -1,10 +1,7 @@
+import { interrupt } from "@langchain/langgraph";
 import { State } from "../types";
-import { withTimeout } from "../../utils/withTimeout";
 
-export async function approveNode(
-  state: State,
-  context: any,
-): Promise<Partial<State>> {
+export async function approveNode(state: State): Promise<Partial<State>> {
   if (state.status === "cancelled") return {};
 
   const steps = state.steps ?? [];
@@ -16,36 +13,21 @@ export async function approveNode(
     };
   }
 
-  const interrupt = context?.interrupt as (
-    payload: unknown,
-  ) => Promise<unknown>;
+  const decision = interrupt({ type: "approval_request", steps });
 
-  try {
-    const decision = await withTimeout(
-      interrupt({ type: "approval_request", steps }),
-      60_000,
-    );
+  let approved: boolean;
 
-    let approved: boolean;
-
-    if (
-      decision &&
-      typeof decision === "object" &&
-      "approve" in (decision as any)
-    ) {
-      approved = !!(decision as any).approve;
-    } else {
-      approved = !!decision;
-    }
-
-    return {
-      approved,
-    };
-  } catch {
-    return {
-      approved: false,
-      status: "cancelled",
-      message: "Approval process failed.",
-    };
+  if (
+    decision &&
+    typeof decision === "object" &&
+    "approve" in (decision as object)
+  ) {
+    approved = !!(decision as { approve?: boolean }).approve;
+  } else {
+    approved = !!decision;
   }
+
+  return {
+    approved,
+  };
 }

@@ -1,7 +1,7 @@
 "use client";
 import AgentForm from "@/components/task-agent/AgentForm";
 import RunLogs from "@/components/task-agent/RunLogs";
-import { approveAgent, startAgent } from "@/lib/api";
+import { type AgentOkData, resumeAgent, startAgent } from "@/lib/api";
 import { FinalView, InterruptView } from "@/lib/types";
 import { useState } from "react";
 
@@ -10,6 +10,31 @@ export default function AgentPage() {
   const [interrupt, setInterrupt] = useState<InterruptView | null>(null);
   const [final, setFinal] = useState<FinalView | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
+
+  function applyOkData(data: AgentOkData) {
+    if (data.kind === "final") {
+      setInterrupt(null);
+      setFinal(data.final as FinalView);
+    } else if (data.kind === "needs_clarify") {
+      setThreadId(data.interrupt.threadId);
+      setInterrupt({
+        kind: "needs_clarify",
+        threadId: data.interrupt.threadId,
+        fields: data.interrupt.fields,
+        prompt: data.interrupt.prompt,
+      });
+      setFinal(null);
+    } else {
+      setThreadId(data.interrupt.threadId);
+      setInterrupt({
+        kind: "needs_approval",
+        threadId: data.interrupt.threadId,
+        steps: data.interrupt.steps,
+        prompt: data.interrupt.prompt,
+      });
+      setFinal(null);
+    }
+  }
 
   async function handleAgentStart(input: string) {
     setLoading(true);
@@ -20,18 +45,40 @@ export default function AgentPage() {
       const res = await startAgent(input);
       if (res.status === "error") throw new Error(res.error);
 
-      if (res.data?.kind === "needs_approval") {
-        setThreadId(res.data.interrupt.threadId);
-        setInterrupt(res.data.interrupt);
-      } else if (res.data?.kind === "final") {
-        setFinal(res.data?.final);
-      } else {
-        throw new Error("Some error occured");
-      }
-    } catch (e: any) {
+      if (!res.data) throw new Error("Some error occured");
+
+      applyOkData(res.data);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Failed to start agent run";
       setFinal({
         status: "cancelled",
-        message: e?.message ?? "Failed to start agent run",
+        message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResume(
+    payload: { approve: boolean } | { answers: Record<string, string> },
+  ) {
+    if (!threadId) return;
+    setLoading(true);
+
+    try {
+      const res = await resumeAgent(threadId, payload);
+      if (res.status === "error") throw new Error(res.error);
+
+      if (!res.data) throw new Error("Some error occured");
+
+      applyOkData(res.data);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Failed to resume the flow";
+      setFinal({
+        status: "cancelled",
+        message,
       });
     } finally {
       setLoading(false);
@@ -39,41 +86,15 @@ export default function AgentPage() {
   }
 
   async function handleOnApprove() {
-    if (!threadId) return;
-    setLoading(true);
-
-    try {
-      const res = await approveAgent(threadId, true);
-      if (res.status === "error") throw new Error(res.error);
-      setInterrupt(null);
-      setFinal(res.data?.final ?? null);
-    } catch (e: any) {
-      setFinal({
-        status: "cancelled",
-        message: e?.message ?? "Failed to approve the flow",
-      });
-    } finally {
-      setLoading(false);
-    }
+    await handleResume({ approve: true });
   }
 
   async function handleOnReject() {
-    if (!threadId) return;
-    setLoading(true);
+    await handleResume({ approve: false });
+  }
 
-    try {
-      const res = await approveAgent(threadId, false);
-      if (res.status === "error") throw new Error(res.error);
-      setInterrupt(null);
-      setFinal(res.data?.final ?? null);
-    } catch (e: any) {
-      setFinal({
-        status: "cancelled",
-        message: e?.message ?? "Failed to reject the flow",
-      });
-    } finally {
-      setLoading(false);
-    }
+  async function handleSubmitClarify(answers: Record<string, string>) {
+    await handleResume({ answers });
   }
 
   return (
@@ -89,11 +110,13 @@ export default function AgentPage() {
         </div>
         <AgentForm disabled={loading} onStart={handleAgentStart} />
         <RunLogs
+          key={threadId ?? "idle"}
           interrupt={interrupt}
           final={final}
           loading={loading}
           onApprove={handleOnApprove}
           onReject={handleOnReject}
+          onSubmitClarify={handleSubmitClarify}
         />
       </div>
     </main>
