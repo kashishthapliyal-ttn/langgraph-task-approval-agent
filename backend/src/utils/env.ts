@@ -1,13 +1,13 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
 
-import { z } from 'zod';
+import { z } from "zod";
 
 const EnvSchema = z.object({
-  GOOGLE_API_KEY: z.string().min(1, 'Gemini Api Key is Missing'),
-  GEMINI_MODEL: z.string().default('gemini-2.0-flash-lite'),
-  GROQ_API_KEY: z.string().min(1, 'GROQ Api Key is Missing'),
-  GROQ_MODEL: z.string().default('llama-3.1-8b-instant'),
+  GOOGLE_API_KEY: z.string().min(1, "Gemini Api Key is Missing"),
+  GEMINI_MODEL: z.string().default("gemini-2.0-flash-lite"),
+  GROQ_API_KEY: z.string().min(1, "GROQ Api Key is Missing"),
+  GROQ_MODEL: z.string().default("llama-3.1-8b-instant"),
   PROVIDER: z.string(),
   PORT: z.string(),
 });
@@ -15,7 +15,7 @@ const EnvSchema = z.object({
 const parsed = EnvSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  throw new Error('Error while parsing env');
+  throw new Error("Error while parsing env");
 }
 
 const raw = parsed.data;

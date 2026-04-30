@@ -1,20 +1,20 @@
-import { State } from '../types';
+import { State } from "../types";
 
 const MAX_WORDS = 300;
 const MAX_TOKENS = 1000;
 
 export async function ValidateNode(state: State): Promise<Partial<State>> {
-  const raw = state.input ?? '';
+  const raw = state.input ?? "";
   const trimmed = raw.trim();
 
   if (!trimmed) {
     return {
-      status: 'cancelled',
-      message: 'Please enter a valid prompt.',
+      status: "cancelled",
+      message: "Please enter a valid prompt.",
     };
   }
 
-  const cleaned = trimmed.replace(/[\u0000-\u001F\u007F]/g, '');
+  const cleaned = trimmed.replaceAll(/[\u0000-\u001F\u007F]/g, "");
 
   const suspiciousPatterns = [
     /ignore previous instructions/i,
@@ -24,19 +24,19 @@ export async function ValidateNode(state: State): Promise<Partial<State>> {
 
   if (suspiciousPatterns.some((p) => p.test(cleaned))) {
     return {
-      status: 'cancelled',
-      message: 'Suspicious input detected.',
+      status: "cancelled",
+      message: "Suspicious input detected.",
     };
   }
 
   const words = cleaned.split(/\s+/);
-  const limited = words.slice(0, MAX_WORDS).join(' ');
+  const limited = words.slice(0, MAX_WORDS).join(" ");
 
   const approxTokens = Math.ceil(limited.length / 4);
   if (approxTokens > MAX_TOKENS) {
     return {
-      status: 'cancelled',
-      message: 'Input too large.',
+      status: "cancelled",
+      message: "Input too large.",
     };
   }
 

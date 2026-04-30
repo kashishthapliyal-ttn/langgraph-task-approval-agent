@@ -5,40 +5,40 @@ import {
   MemorySaver,
   START,
   StateGraph,
-} from '@langchain/langgraph';
-import { ValidateNode } from './nodes/01_validate';
-import { PlanNode } from './nodes/02_plan';
-import { approveNode } from './nodes/03_approve';
-import { executeNode } from './nodes/04_execute';
-import { finalizeNode } from './nodes/05_finalize';
-import { makeInitialState, State } from './types';
+} from "@langchain/langgraph";
+import { ValidateNode } from "./nodes/01_validate";
+import { PlanNode } from "./nodes/02_plan";
+import { approveNode } from "./nodes/03_approve";
+import { executeNode } from "./nodes/04_execute";
+import { finalizeNode } from "./nodes/05_finalize";
+import { makeInitialState, State } from "./types";
 
 const StateAnn = Annotation.Root({
   input: Annotation<string>,
   steps: Annotation<string[] | undefined>,
   approved: Annotation<boolean | undefined>,
   results: Annotation<Array<{ step: string; note: string }> | undefined>,
-  status: Annotation<'planned' | 'done' | 'cancelled' | undefined>,
+  status: Annotation<"planned" | "done" | "cancelled" | undefined>,
   message: Annotation<string | undefined>,
 });
 
 const builder = new StateGraph(StateAnn)
-  .addNode('validate', ValidateNode)
-  .addNode('plan', PlanNode)
-  .addNode('approve', approveNode)
-  .addNode('execute', executeNode)
-  .addNode('finalize', finalizeNode);
+  .addNode("validate", ValidateNode)
+  .addNode("plan", PlanNode)
+  .addNode("approve", approveNode)
+  .addNode("execute", executeNode)
+  .addNode("finalize", finalizeNode);
 
-builder.addEdge(START, 'validate');
-builder.addEdge('validate', 'plan');
-builder.addEdge('plan', 'approve');
+builder.addEdge(START, "validate");
+builder.addEdge("validate", "plan");
+builder.addEdge("plan", "approve");
 
-builder.addConditionalEdges('approve', (s: typeof StateAnn.State) => {
-  return s.approved ? 'execute' : 'finalize';
+builder.addConditionalEdges("approve", (s: typeof StateAnn.State) => {
+  return s.approved ? "execute" : "finalize";
 });
 
-builder.addEdge('execute', 'finalize');
-builder.addEdge('finalize', END);
+builder.addEdge("execute", "finalize");
+builder.addEdge("finalize", END);
 
 const checkPointer = new MemorySaver();
 const graph = builder.compile({
@@ -62,7 +62,7 @@ export async function startAgentRun(
 
   const result: any = await graph.invoke(makeInitialState(input), config);
 
-  if (result && result.__interrupt__) {
+  if (result?.__interrupt__) {
     const first = Array.isArray(result.__interrupt__)
       ? result.__interrupt__[0]
       : result.__interrupt__;

@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { State } from '../types';
-import { getChatModel } from '../../utils/model';
+import { z } from "zod";
+import { State } from "../types";
+import { getChatModel } from "../../utils/model";
 
 const NotesSchema = z.object({
   notes: z.array(z.string().min(1).max(300)).min(1).max(20),
@@ -20,7 +20,7 @@ function createHumanPromptContent(steps: string[]) {
   Plain text only.
   `,
     `Steps = ${list}`,
-  ].join('\n');
+  ].join("\n");
 }
 
 export async function executeNode(state: State): Promise<Partial<State>> {
@@ -36,18 +36,18 @@ export async function executeNode(state: State): Promise<Partial<State>> {
   try {
     if (steps.length > 10) {
       return {
-        status: 'cancelled',
-        message: 'Too many steps to execute.',
+        status: "cancelled",
+        message: "Too many steps to execute.",
       };
     }
 
     const out: Notes = await structuredModel.invoke([
       {
-        role: 'system',
-        content: 'Return only valid JSON matching the schema',
+        role: "system",
+        content: "Return only valid JSON matching the schema",
       },
       {
-        role: 'human',
+        role: "human",
         content: createHumanPromptContent(steps),
       },
     ]);
@@ -64,13 +64,13 @@ export async function executeNode(state: State): Promise<Partial<State>> {
 
     return {
       results,
-      status: 'done',
+      status: "done",
       message: `Executed ${results.length} step(s)`,
     };
-  } catch (err) {
+  } catch {
     return {
-      status: 'cancelled',
-      message: 'Execution failed',
+      status: "cancelled",
+      message: "Execution failed",
     };
   }
 }

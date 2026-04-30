@@ -9,10 +9,10 @@ import { Button } from "../ui/button";
 function AgentForm({
   onStart,
   disabled,
-}: {
+}: Readonly<{
   onStart: (input: string) => void;
   disabled?: boolean;
-}) {
+}>) {
   const [text, setText] = useState("");
 
   return (

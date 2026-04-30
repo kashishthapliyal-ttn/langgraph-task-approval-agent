@@ -2,7 +2,6 @@
 
 import {
   AlertCircle,
-  CheckCircle,
   CheckCircle2,
   Loader2,
   Sparkles,
@@ -26,13 +25,13 @@ function RunLogs({
   loading,
   onApprove,
   onReject,
-}: {
+}: Readonly<{
   interrupt?: InterruptView | null;
   final?: FinalView | null;
   loading?: boolean;
   onApprove?: () => void;
   onReject?: () => void;
-}) {
+}>) {
   if (loading) {
     return (
       <Card className="mt-5 border-primary/20">

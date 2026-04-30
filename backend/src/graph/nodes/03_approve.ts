@@ -1,18 +1,18 @@
-import { State } from '../types';
-import { withTimeout } from '../../utils/withTimeout';
+import { State } from "../types";
+import { withTimeout } from "../../utils/withTimeout";
 
 export async function approveNode(
   state: State,
   context: any,
 ): Promise<Partial<State>> {
-  if (state.status === 'cancelled') return {};
+  if (state.status === "cancelled") return {};
 
   const steps = state.steps ?? [];
 
   if (steps.length === 0) {
     return {
       approved: true,
-      message: 'No steps to approve; procedding->',
+      message: "No steps to approve; procedding->",
     };
   }
 
@@ -22,7 +22,7 @@ export async function approveNode(
 
   try {
     const decision = await withTimeout(
-      interrupt({ type: 'approval_request', steps }),
+      interrupt({ type: "approval_request", steps }),
       60_000,
     );
 
@@ -30,8 +30,8 @@ export async function approveNode(
 
     if (
       decision &&
-      typeof decision === 'object' &&
-      'approve' in (decision as any)
+      typeof decision === "object" &&
+      "approve" in (decision as any)
     ) {
       approved = !!(decision as any).approve;
     } else {
@@ -41,11 +41,11 @@ export async function approveNode(
     return {
       approved,
     };
-  } catch (err) {
+  } catch {
     return {
       approved: false,
-      status: 'cancelled',
-      message: 'Approval process failed.',
+      status: "cancelled",
+      message: "Approval process failed.",
     };
   }
 }
