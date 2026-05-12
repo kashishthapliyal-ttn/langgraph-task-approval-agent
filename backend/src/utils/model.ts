@@ -20,7 +20,6 @@ export function getChatModel(opts: ModelOpts = {}): BaseChatModel {
       });
 
     case "groq":
-    default:
       return new ChatGroq({
         apiKey: env.GROQ_API_KEY,
         model: env.GROQ_MODEL,
