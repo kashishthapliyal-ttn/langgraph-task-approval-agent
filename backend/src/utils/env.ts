@@ -18,9 +18,9 @@ const EnvSchema = z
   .object({
     DB_HOST: z.string().default("localhost"),
     DB_PORT: z.coerce.number().int().positive().default(5432),
-    DB_USERNAME: z.string().min(1, "DB_USERNAME is required"),
+    DB_USERNAME: z.string().default("postgres"),
     DB_PASSWORD: z.string().default(""),
-    DB_NAME: z.string().min(1, "DB_NAME is required"),
+    DB_NAME: z.string().default("postgres"),
     DB_SSL: boolFromEnv.default(false),
     GEMINI_MODEL: z.string().default("gemini-2.0-flash-lite"),
     GROQ_MODEL: z.string().default("llama-3.1-8b-instant"),

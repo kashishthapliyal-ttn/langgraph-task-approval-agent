@@ -5,6 +5,7 @@ export type SchemaColumn = {
   type: string;
   description?: string;
   nullable?: boolean;
+  primaryKey?: boolean;
   references?: string;
 };
 
@@ -15,25 +16,12 @@ export type SchemaTable = {
   columns: SchemaColumn[];
 };
 
-export type SchemaResponse = {
-  status: "ok";
-  data: { tables: SchemaTable[] };
-};
+export type ParseSchemaResponse =
+  | { status: "ok"; data: { schemaId: string; tables: SchemaTable[] } }
+  | { status: "error"; error: string; details?: unknown };
 
 export type GenerateOkData = {
   sql: string;
-  rationale?: string;
-};
-
-export type ExecuteOkData = {
-  sql: string;
-  columns: string[];
-  rows: Record<string, unknown>[];
-  rowCount: number;
-  maxRows: number;
-};
-
-export type QuerySuccessData = ExecuteOkData & {
   rationale?: string;
 };
 
@@ -46,44 +34,65 @@ export type GenerateResponse =
       generatedSql?: string;
     };
 
-export type ExecuteResponse =
-  | { status: "ok"; data: ExecuteOkData }
-  | {
-      status: "error";
-      error: string;
-      details?: unknown;
-      generatedSql?: string;
-    };
-
-export type QueryResponse =
-  | { status: "ok"; data: QuerySuccessData }
-  | {
-      status: "error";
-      error: string;
-      details?: unknown;
-      generatedSql?: string;
-    };
-
-export async function fetchSchema(): Promise<SchemaTable[]> {
-  const res = await fetch(`${BASE}/meta/schema`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Schema request failed: ${res.status}`);
-  const body = (await res.json()) as SchemaResponse;
-  if (body.status !== "ok") throw new Error("Invalid schema response");
-  return body.data.tables;
-}
-
 async function parseJsonBody(res: Response): Promise<Record<string, unknown>> {
   return res.json() as Promise<Record<string, unknown>>;
 }
 
+function formatApiError(body: Record<string, unknown>, status: number): string {
+  const base = (body.error as string) ?? `Request failed (${status})`;
+  const details = body.details as
+    | { fieldErrors?: Record<string, string[]> }
+    | undefined;
+  if (details?.fieldErrors) {
+    const fields = Object.entries(details.fieldErrors)
+      .flatMap(([k, msgs]) => msgs.map((m) => `${k}: ${m}`))
+      .join("; ");
+    if (fields) return `${base} (${fields})`;
+  }
+  return base;
+}
+
+export async function parseSqlSchema(
+  sql: string,
+  init?: { signal?: AbortSignal },
+): Promise<ParseSchemaResponse> {
+  const res = await fetch(`${BASE}/schema/parse`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sql }),
+    signal: init?.signal,
+  });
+
+  const body = (await parseJsonBody(res)) as {
+    status?: string;
+    data?: { schemaId: string; tables: SchemaTable[] };
+    error?: string;
+    details?: unknown;
+  };
+
+  if (body.status === "ok" && body.data?.tables && body.data.schemaId) {
+    return {
+      status: "ok",
+      data: { schemaId: body.data.schemaId, tables: body.data.tables },
+    };
+  }
+
+  return {
+    status: "error",
+    error: formatApiError(body, res.status),
+    details: body.details,
+  };
+}
+
 export async function generateSqlAgentQuery(
   question: string,
+  schemaId: string,
   init?: { signal?: AbortSignal },
 ): Promise<GenerateResponse> {
   const res = await fetch(`${BASE}/sql-agent/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, schemaId }),
     signal: init?.signal,
   });
 
@@ -101,69 +110,7 @@ export async function generateSqlAgentQuery(
 
   return {
     status: "error",
-    error: (body.error as string) ?? `Request failed (${res.status})`,
-    details: body.details,
-    generatedSql: body.generatedSql,
-  };
-}
-
-export async function executeSqlAgentQuery(
-  sql: string,
-  init?: { signal?: AbortSignal },
-): Promise<ExecuteResponse> {
-  const res = await fetch(`${BASE}/sql-agent/execute`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sql }),
-    signal: init?.signal,
-  });
-
-  const body = (await parseJsonBody(res)) as {
-    status?: string;
-    data?: ExecuteOkData;
-    error?: string;
-    details?: unknown;
-    generatedSql?: string;
-  };
-
-  if (body.status === "ok" && body.data) {
-    return { status: "ok", data: body.data };
-  }
-
-  return {
-    status: "error",
-    error: (body.error as string) ?? `Request failed (${res.status})`,
-    details: body.details,
-    generatedSql: body.generatedSql,
-  };
-}
-
-export async function runSqlAgentQuery(
-  question: string,
-  init?: { signal?: AbortSignal },
-): Promise<QueryResponse> {
-  const res = await fetch(`${BASE}/sql-agent/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
-    signal: init?.signal,
-  });
-
-  const body = (await parseJsonBody(res)) as {
-    status?: string;
-    data?: QuerySuccessData;
-    error?: string;
-    details?: unknown;
-    generatedSql?: string;
-  };
-
-  if (body.status === "ok" && body.data) {
-    return { status: "ok", data: body.data };
-  }
-
-  return {
-    status: "error",
-    error: (body.error as string) ?? `Request failed (${res.status})`,
+    error: formatApiError(body, res.status),
     details: body.details,
     generatedSql: body.generatedSql,
   };
